@@ -90,7 +90,7 @@ class User(AbstractUser):
     )
 
     def __str__(self):
-        return f'{self.first_name} {self.last_name}'
+        return f'{self.first_name} {self.last_name}'.strip() or self.email
 
     class Meta:
         verbose_name = 'Пользователь'
@@ -163,18 +163,17 @@ class Product(models.Model):
 class ProductInfo(models.Model):
     # Дополнительное поле, например модель устройства
     model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
-    external_id = models.PositiveIntegerField(verbose_name='Внешний ИД')
     product = models.ForeignKey(
         Product,
         verbose_name='Продукт',
-        related_name='product_infos',
+        related_name='infos',
         blank=True,
         on_delete=models.CASCADE
     )
     shop = models.ForeignKey(
         Shop,
         verbose_name='Магазин',
-        related_name='product_infos',
+        related_name='infos',
         blank=True,
         on_delete=models.CASCADE
     )
@@ -186,7 +185,7 @@ class ProductInfo(models.Model):
         verbose_name = 'Информация о продукте'
         verbose_name_plural = "Информационный список о продуктах"
         constraints = [
-            models.UniqueConstraint(fields=['product', 'shop', 'external_id'], name='unique_product_info'),
+            models.UniqueConstraint(fields=['product', 'shop'], name='unique_product_info'),
         ]
 
     def __str__(self):
@@ -303,14 +302,14 @@ class OrderItem(models.Model):
     order = models.ForeignKey(
         Order,
         verbose_name='Заказ',
-        related_name='ordered_items',
+        related_name='items',
         blank=True,
         on_delete=models.CASCADE
     )
     product_info = models.ForeignKey(
         ProductInfo,
         verbose_name='Информация о продукте',
-        related_name='ordered_items',
+        related_name='items',
         blank=True,
         on_delete=models.CASCADE
     )
@@ -364,4 +363,3 @@ class ConfirmEmailToken(models.Model):
 
     def __str__(self):
         return f"Токен для {self.user.email}"
-
