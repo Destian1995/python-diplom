@@ -139,9 +139,10 @@ class Category(models.Model):
         return self.name
 
 
-# Модель продукта
 class Product(models.Model):
     name = models.CharField(max_length=80, verbose_name='Название')
+    model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
+    external_id = models.CharField(max_length=255, unique=True)
     category = models.ForeignKey(
         Category,
         verbose_name='Категория',
@@ -149,7 +150,7 @@ class Product(models.Model):
         blank=True,
         on_delete=models.CASCADE
     )
-
+    description = models.TextField()
     class Meta:
         verbose_name = 'Продукт'
         verbose_name_plural = "Список продуктов"
@@ -161,8 +162,6 @@ class Product(models.Model):
 
 # Модель информации о продукте
 class ProductInfo(models.Model):
-    # Дополнительное поле, например модель устройства
-    model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
     product = models.ForeignKey(
         Product,
         verbose_name='Продукт',
@@ -242,13 +241,10 @@ class ProductParameter(models.Model):
 
 # Модель контактов пользователя (адрес доставки, телефон и т.п.)
 class Contact(models.Model):
-    user = models.ForeignKey(
-        User,
-        verbose_name='Пользователь',
-        related_name='contacts',
-        blank=True,
-        on_delete=models.CASCADE
-    )
+    first_name = models.CharField(max_length=100, default='', verbose_name='Имя')
+    last_name = models.CharField(max_length=100, default='', verbose_name='Фамилия')
+    patronymic = models.CharField(max_length=100, null=True, blank=True, verbose_name='Отчество')
+    email = models.EmailField(max_length=100, unique=True, default='')
     city = models.CharField(max_length=50, verbose_name='Город')
     street = models.CharField(max_length=100, verbose_name='Улица')
     house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
