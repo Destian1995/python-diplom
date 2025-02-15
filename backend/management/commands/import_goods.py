@@ -2,13 +2,28 @@ import yaml
 from django.core.management.base import BaseCommand
 from backend.models import Category, Product, ProductInfo, ProductParameter, Shop, Parameter
 from django.db import IntegrityError
-
+import os
 
 class Command(BaseCommand):
     help = 'Импортирует товары из YAML файла'
 
+    def add_arguments(self, parser):
+        # Добавление аргумента для пути к YAML файлу
+        parser.add_argument(
+            '--file',
+            type=str,
+            help='Путь к YAML файлу',
+            default='data/shop1.yaml'
+        )
+
     def handle(self, *args, **kwargs):
-        with open('data/shop1.yaml', 'r', encoding='utf-8') as file:
+        file_path = kwargs['file']
+
+        if not os.path.exists(file_path):
+            self.stdout.write(self.style.ERROR(f'Файл {file_path} не найден!'))
+            return
+
+        with open(file_path, 'r', encoding='utf-8') as file:
             data = yaml.safe_load(file)
 
         shop_name = data.get('shop')
@@ -81,16 +96,17 @@ class Command(BaseCommand):
 
                 # Импорт параметров товара
                 for param_name, param_value in product_data.get('parameters', {}).items():
-                    param, created = Parameter.objects.get_or_create(name=param_name)
-                    product_param, created = ProductParameter.objects.get_or_create(
-                        product_info=product_info,
-                        parameter=param,
-                        defaults={'value': param_value}
-                    )
-                    if created:
-                        self.stdout.write(self.style.SUCCESS(f'Параметр {param_name}: {param_value} добавлен для товара {product.name}.'))
-                    else:
-                        self.stdout.write(self.style.WARNING(f'Параметр {param_name}: {param_value} для товара {product.name} уже существует.'))
+                    if param_value:  # Пропуск пустых значений параметров
+                        param, created = Parameter.objects.get_or_create(name=param_name)
+                        product_param, created = ProductParameter.objects.get_or_create(
+                            product_info=product_info,
+                            parameter=param,
+                            defaults={'value': param_value}
+                        )
+                        if created:
+                            self.stdout.write(self.style.SUCCESS(f'Параметр {param_name}: {param_value} добавлен для товара {product.name}.'))
+                        else:
+                            self.stdout.write(self.style.WARNING(f'Параметр {param_name}: {param_value} для товара {product.name} уже существует.'))
 
             except IntegrityError as e:
                 self.stdout.write(self.style.ERROR(f"Ошибка целостности при импорте товара {product_data['name']}: {e}"))
@@ -98,3 +114,4 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f"Неизвестная ошибка при импорте товара {product_data['name']}: {e}"))
 
         self.stdout.write(self.style.SUCCESS(f'Импорт товаров из {shop_name} завершён.'))
+

@@ -60,7 +60,7 @@ class User(AbstractUser):
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    email = models.EmailField(_('email address'), unique=True)
+    email = models.EmailField(_('email'), unique=True)
 
     company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
     position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
@@ -114,7 +114,7 @@ class Shop(models.Model):
     class Meta:
         verbose_name = 'Магазин'
         verbose_name_plural = "Список магазинов"
-        ordering = ('-name',)
+        ordering = ('name',)
 
     def __str__(self):
         return self.name
@@ -133,7 +133,7 @@ class Category(models.Model):
     class Meta:
         verbose_name = 'Категория'
         verbose_name_plural = "Список категорий"
-        ordering = ('-name',)
+        ordering = ('name',)
 
     def __str__(self):
         return self.name
@@ -143,6 +143,8 @@ class Product(models.Model):
     name = models.CharField(max_length=80, verbose_name='Название')
     model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
     external_id = models.CharField(max_length=255, unique=True)
+    brand = models.CharField(max_length=100, verbose_name='Бренд', blank=True)
+    stock = models.PositiveIntegerField(verbose_name='Количество на складе', default=0)
     category = models.ForeignKey(
         Category,
         verbose_name='Категория',
@@ -150,17 +152,17 @@ class Product(models.Model):
         blank=True,
         on_delete=models.CASCADE
     )
-    description = models.TextField()
+    description = models.TextField(verbose_name='Описание')
+
     class Meta:
         verbose_name = 'Продукт'
         verbose_name_plural = "Список продуктов"
-        ordering = ('-name',)
+        ordering = ('name',)
 
     def __str__(self):
         return self.name
 
 
-# Модель информации о продукте
 class ProductInfo(models.Model):
     product = models.ForeignKey(
         Product,
@@ -176,9 +178,12 @@ class ProductInfo(models.Model):
         blank=True,
         on_delete=models.CASCADE
     )
+    model = models.CharField(max_length=255, default='')
+    external_id = models.CharField(max_length=255, unique=True, default='')
     quantity = models.PositiveIntegerField(verbose_name='Количество')
     price = models.PositiveIntegerField(verbose_name='Цена')
     price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена')
+    discount = models.PositiveIntegerField(verbose_name='Скидка (%)', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Информация о продукте'
@@ -191,15 +196,16 @@ class ProductInfo(models.Model):
         return f'{self.product.name} ({self.shop.name})'
 
     def get_total_price(self, quantity):
-        """
-        Пример дополнительного метода для расчета стоимости покупки
-        """
-        return self.price * quantity
+        """ Пример дополнительного метода для расчета стоимости покупки """
+        total_price = self.price * quantity
+        if self.discount:
+            total_price -= total_price * self.discount / 100
+        return total_price
 
 
-# Модель параметра (характеристики товара)
 class Parameter(models.Model):
     name = models.CharField(max_length=40, verbose_name='Название')
+    unit = models.CharField(max_length=20, verbose_name='Единица измерения', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Имя параметра'
@@ -210,7 +216,6 @@ class Parameter(models.Model):
         return self.name
 
 
-# Модель значения параметра для конкретного товара
 class ProductParameter(models.Model):
     product_info = models.ForeignKey(
         ProductInfo,

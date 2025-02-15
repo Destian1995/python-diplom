@@ -9,14 +9,15 @@ from rest_framework.generics import (
     ListAPIView, RetrieveAPIView, CreateAPIView,
     RetrieveUpdateDestroyAPIView, UpdateAPIView
 )
-from rest_framework.authtoken.models import Token
+from rest_framework import viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import User as CustomUser
 from .models import (
     Product, ProductInfo, ConfirmEmailToken, Order, OrderItem,
-    Contact, STATE_CHOICES
+    Contact, STATE_CHOICES, Parameter
 )
 from .serializers import (
-    LoginSerializer, UserSerializer, RegistrationSerializer, ProductSerializer,
+    LoginSerializer, ParameterSerializer, RegistrationSerializer, ProductSerializer,
     ProductInfoSerializer, ContactSerializer, OrderSerializer,
     OrderItemSerializer
 )
@@ -82,17 +83,40 @@ class LoginView(GenericAPIView):
             return Response({'detail': 'Успешный вход.'})
         return Response({'detail': 'Неверные учетные данные.'}, status=status.HTTP_400_BAD_REQUEST)
 
-# Список товаров (уже был)
+# Список товаров
 class ProductListView(ListAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.AllowAny]
 
-# Детальная информация о товаре (используем модель ProductInfo)
+
+class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Product.objects.all().select_related('category').prefetch_related('infos')
+    serializer_class = ProductSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
+    # Фильтрация
+    filterset_fields = ['category', 'brand', 'stock']
+
+    # Поиск
+    search_fields = ['name', 'description']
+
+    # Сортировка
+    ordering_fields = ['name', 'stock']
+
+# Детальная информация о товаре
 class ProductInfoDetailView(RetrieveAPIView):
     queryset = ProductInfo.objects.all()
     serializer_class = ProductInfoSerializer
     permission_classes = [permissions.AllowAny]
+
+
+# Список всех параметров
+class ParameterListView(ListAPIView):
+    queryset = Parameter.objects.all()
+    serializer_class = ParameterSerializer
+    permission_classes = [permissions.AllowAny]
+
 
 # Работа с корзиной: получение, добавление и удаление позиций
 class BasketView(APIView):

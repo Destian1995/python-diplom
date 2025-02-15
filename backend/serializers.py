@@ -1,5 +1,5 @@
-# backend/serializers.py
 from rest_framework import serializers
+import json
 from .models import (
     User as CustomUser, Shop, Category, Product, ProductInfo,
     Parameter, ProductParameter, Contact, Order, OrderItem, ConfirmEmailToken
@@ -54,10 +54,39 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 class ProductSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    shop_prices = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
-        fields = ['id', 'name', 'category']
-        read_only_fields = ['id']
+        fields = [
+            'id', 'name', 'model', 'category', 'category_name', 'description', 'shop_prices'
+        ]
+
+    def get_shop_prices(self, obj):
+        """Получаем список цен из разных магазинов"""
+        return [
+            {
+                'shop': info.shop.name,
+                'price': info.price,
+                'price_rrc': info.price_rrc,
+                'quantity': info.quantity
+            }
+            for info in obj.infos.all()
+        ]
+
+    def get_description(self, obj):
+        """Собираем описание с параметрами товара в виде словаря"""
+        params = {}
+        for product_param in ProductParameter.objects.filter(product_info__product=obj):
+            param_name = product_param.parameter.name
+            param_value = product_param.value
+            params[param_name] = param_value
+
+        # Возвращаем словарь с параметрами
+        return params
+
 
 class ProductInfoSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
@@ -65,16 +94,16 @@ class ProductInfoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductInfo
-        fields = [
-            'id', 'model', 'product', 'shop', 'quantity', 'price', 'price_rrc'
-        ]
+        fields = ['id', 'product', 'shop', 'quantity', 'price', 'price_rrc']
         read_only_fields = ['id']
+
 
 class ParameterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parameter
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'unit']
         read_only_fields = ['id']
+
 
 class ProductParameterSerializer(serializers.ModelSerializer):
     parameter = ParameterSerializer(read_only=True)
@@ -83,6 +112,7 @@ class ProductParameterSerializer(serializers.ModelSerializer):
         model = ProductParameter
         fields = ['id', 'product_info', 'parameter', 'value']
         read_only_fields = ['id']
+
 
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
