@@ -244,13 +244,12 @@ class ProductParameter(models.Model):
         return f'{self.parameter.name}: {self.value}'
 
 
-# Модель контактов пользователя (адрес доставки, телефон и т.п.)
 class Contact(models.Model):
-    #user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, max_length=100, default='')
     first_name = models.CharField(max_length=100, default='', verbose_name='Имя')
     last_name = models.CharField(max_length=100, default='', verbose_name='Фамилия')
     patronymic = models.CharField(max_length=100, null=True, blank=True, verbose_name='Отчество')
-    email = models.EmailField(unique=True, null=True, blank=True)
+    email = models.EmailField(max_length=100, unique=True, default='')
     city = models.CharField(max_length=50, verbose_name='Город')
     street = models.CharField(max_length=100, verbose_name='Улица')
     house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
@@ -265,6 +264,7 @@ class Contact(models.Model):
 
     def __str__(self):
         return f'{self.city}, {self.street} {self.house}'
+
 
 
 # Модель заказа
