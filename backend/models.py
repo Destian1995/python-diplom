@@ -246,10 +246,11 @@ class ProductParameter(models.Model):
 
 # Модель контактов пользователя (адрес доставки, телефон и т.п.)
 class Contact(models.Model):
+    #user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     first_name = models.CharField(max_length=100, default='', verbose_name='Имя')
     last_name = models.CharField(max_length=100, default='', verbose_name='Фамилия')
     patronymic = models.CharField(max_length=100, null=True, blank=True, verbose_name='Отчество')
-    email = models.EmailField(max_length=100, unique=True, default='')
+    email = models.EmailField(unique=True, null=True, blank=True)
     city = models.CharField(max_length=50, verbose_name='Город')
     street = models.CharField(max_length=100, verbose_name='Улица')
     house = models.CharField(max_length=15, verbose_name='Дом', blank=True)

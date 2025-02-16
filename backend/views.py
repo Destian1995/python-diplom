@@ -1,17 +1,15 @@
 from rest_framework.generics import GenericAPIView, CreateAPIView, ListAPIView, RetrieveAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.views import APIView
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate
 from django.core.mail import send_mail
 from rest_framework import status, permissions
 from rest_framework.response import Response
-from rest_framework.generics import (
-    ListAPIView, RetrieveAPIView, CreateAPIView,
-    RetrieveUpdateDestroyAPIView, UpdateAPIView
-)
 from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import User as CustomUser
+from rest_framework.authtoken.models import Token
 from .models import (
     Product, ProductInfo, ConfirmEmailToken, Order, OrderItem,
     Contact, STATE_CHOICES, Parameter
@@ -33,25 +31,33 @@ class RegistrationView(CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        serializer = RegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            # Создаем пользователя, изначально неактивного
-            user = serializer.save(is_active=False)
-            user.set_password(serializer.validated_data['password'])
-            user.save()
-            # Создаем токен подтверждения email
-            token_obj = ConfirmEmailToken.objects.create(user=user)
-            confirmation_link = f"http://{request.get_host()}/api/confirm-email/{token_obj.key}/"
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Создаём пользователя с захэшированным паролем
+        user = serializer.save()
+        user.set_password(serializer.validated_data['password'])
+        user.save()
+
+        # Создание токена и отправка письма
+        token_obj = ConfirmEmailToken.objects.create(user=user)
+        confirmation_link = f"http://{request.get_host()}/api/confirm-email/{token_obj.key}/"
+        try:
             send_mail(
                 subject='Подтверждение Email',
-                message=f'Подтвердите ваш email, перейдя по ссылке: {confirmation_link}',
+                message=f'Подтвердите ваш email: {confirmation_link}',
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
-                fail_silently=False,
             )
-            return Response({'detail': 'Пользователь создан. Проверьте почту для подтверждения.'},
-                            status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # Логирование ошибки
+            logger.error(f"Ошибка при отправке email: {str(e)}")
+            return Response({'detail': f'Ошибка при отправке email: {str(e)}'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'detail': 'Пользователь создан. Проверьте почту для подтверждения.'},
+                        status=status.HTTP_201_CREATED)
+
 
 # Подтверждение email по токену
 class ConfirmEmailView(APIView):
@@ -77,11 +83,14 @@ class LoginView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
-        user = authenticate(request, username=email, password=password)
-        if user:
-            # Здесь можно вернуть токен или другую информацию
-            return Response({'detail': 'Успешный вход.'})
+        user = authenticate(request, email=email, password=password)
+        if user and user.is_active:
+            token, _ = Token.objects.get_or_create(user=user)
+            return Response({'token': token.key, 'detail': 'Успешный вход.'})
+        elif user and not user.is_active:
+            return Response({'detail': 'Аккаунт не активирован. Проверьте почту.'}, status=status.HTTP_403_FORBIDDEN)
         return Response({'detail': 'Неверные учетные данные.'}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # Список товаров
 class ProductListView(ListAPIView):
@@ -133,6 +142,13 @@ class BasketView(APIView):
         # Ожидаем, что в запросе будут product_info (id) и quantity
         product_info_id = request.data.get('product_info')
         quantity = request.data.get('quantity', 1)
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise ValueError
+        except ValueError:
+            return Response({'detail': 'Некорректное количество.'}, status=status.HTTP_400_BAD_REQUEST)
+
         if not product_info_id:
             return Response({'detail': 'Не указан product_info.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -176,6 +192,7 @@ class ContactUpdateView(RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return Contact.objects.filter(user=self.request.user)
 
+
 # Подтверждение заказа (перевод заказа из корзины в новый заказ)
 class OrderConfirmView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -192,7 +209,8 @@ class OrderConfirmView(APIView):
             basket = Order.objects.get(user=request.user, state='basket')
         except Order.DoesNotExist:
             return Response({'detail': 'Корзина пуста.'}, status=status.HTTP_400_BAD_REQUEST)
-        if basket.items.count() == 0:
+        print("basket:", basket)  # Логирование состояния корзины
+        if basket.order_items.count() == 0:
             return Response({'detail': 'В корзине нет товаров.'}, status=status.HTTP_400_BAD_REQUEST)
         basket.contact = contact
         basket.state = 'new'
@@ -207,6 +225,7 @@ class OrderConfirmView(APIView):
         )
         serializer = OrderSerializer(basket)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 # Получение списка заказов (исключая корзину)
 class OrderListView(ListAPIView):
@@ -230,15 +249,15 @@ class OrderStatusUpdateView(UpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Order.objects.all()
 
-    def patch(self, request, *args, **kwargs):
+    def perform_update(self, serializer):
         order = self.get_object()
-        new_status = request.data.get('state')
-        # Здесь можно добавить проверку прав: например, разрешать изменение статуса только админам
-        if not request.user.is_staff:
-            return Response({'detail': 'Нет прав для изменения статуса.'}, status=status.HTTP_403_FORBIDDEN)
-        if new_status not in dict(STATE_CHOICES).keys():
-            return Response({'detail': 'Неверный статус.'}, status=status.HTTP_400_BAD_REQUEST)
-        order.state = new_status
-        order.save()
-        serializer = self.get_serializer(order)
-        return Response(serializer.data)
+        new_status = self.request.data.get('state')
+
+        if not self.request.user.is_staff:
+            raise PermissionDenied('Нет прав для изменения статуса.')
+
+        if new_status not in [state[0] for state in STATE_CHOICES]:
+            raise ValidationError({'detail': 'Неверный статус.'})
+
+        serializer.save(state=new_status)
+

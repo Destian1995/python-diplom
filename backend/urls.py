@@ -18,6 +18,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'products', ProductViewSet, basename='products')
 
+
 urlpatterns = [
     path('', include(router.urls)),
     path('register/', RegistrationView.as_view(), name='register'),

@@ -1,3 +1,4 @@
+
 """
 Django settings for orders project.
 
@@ -27,7 +28,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-
+SITE_URL = 'http://172.20.43.254:8000'
 # Application definition
 
 INSTALLED_APPS = [
@@ -45,7 +46,17 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework.authentication.TokenAuthentication'],
 }
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.mail.ru'
+EMAIL_PORT = 465  # Порт для SSL
+EMAIL_USE_SSL = True  # Использование SSL
+EMAIL_HOST_USER = 'Lerdonia@mail.ru'  # Ваш email
+EMAIL_HOST_PASSWORD = 'pajcJt8BtE99jVhd1Lpa'  # Ваш пароль
+SERVER_EMAIL = EMAIL_HOST_USER  
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # От кого будут приходить письма
 
 
 MIDDLEWARE = [
@@ -128,7 +139,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

@@ -20,19 +20,28 @@ class UserSerializer(serializers.ModelSerializer):
 
 # Новый сериализатор для регистрации (включает пароль)
 class RegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, label="Пароль")  # Поле пароля
+    password = serializers.CharField(write_only=True, required=True, label="Пароль")
+    password_confirm = serializers.CharField(write_only=True, required=True, label="Подтверждение пароля")
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'password']  # Поля для регистрации
+        fields = ['id', 'email', 'first_name', 'last_name', 'password', 'password_confirm']
         labels = {
             'email': 'Email',
             'first_name': 'Имя',
             'last_name': 'Фамилия',
             'password': 'Пароль',
+            'password_confirm': 'Подтверждение пароля'
         }
 
+    def validate(self, data):
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError("Пароли не совпадают.")
+        return data
+
     def create(self, validated_data):
+        # Удаляем поле password_confirm, так как оно не требуется для создания пользователя
+        validated_data.pop('password_confirm')
         user = CustomUser.objects.create_user(
             email=validated_data['email'],
             password=validated_data['password'],
@@ -40,6 +49,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', '')
         )
         return user
+
 
 class ShopSerializer(serializers.ModelSerializer):
     class Meta:
