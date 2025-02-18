@@ -141,7 +141,7 @@ class Product(models.Model):
     model = models.CharField(max_length=80, verbose_name='Модель', blank=True)
     external_id = models.CharField(max_length=255, unique=True)
     brand = models.CharField(max_length=100, verbose_name='Бренд', blank=True)
-    stock = models.PositiveIntegerField(verbose_name='Количество на складе', default=0)
+    quantity = models.PositiveIntegerField(verbose_name='Количество на складе', default=0)
     category = models.ForeignKey(
         Category,
         verbose_name='Категория',
@@ -177,10 +177,10 @@ class ProductInfo(models.Model):
     )
     model = models.CharField(max_length=255, default='')
     external_id = models.CharField(max_length=255, unique=True, default='')
-    quantity = models.PositiveIntegerField(verbose_name='Количество')
-    price = models.PositiveIntegerField(verbose_name='Цена')
-    price_rrc = models.PositiveIntegerField(verbose_name='Рекомендуемая розничная цена')
-    discount = models.PositiveIntegerField(verbose_name='Скидка (%)', blank=True, null=True)
+    quantity = models.PositiveIntegerField(default=0, verbose_name='Количество')
+    price = models.PositiveIntegerField(default=0, verbose_name='Цена')
+    price_rrc = models.PositiveIntegerField(default=0, verbose_name='Рекомендуемая розничная цена')
+    discount = models.PositiveIntegerField(default=0, verbose_name='Скидка (%)', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Информация о продукте'
@@ -260,8 +260,6 @@ class Contact(models.Model):
 
     def __str__(self):
         return f'{self.city}, {self.street} {self.house}'
-
-
 
 # Модель заказа
 class Order(models.Model):

@@ -102,9 +102,9 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
-    filterset_fields = ['category', 'stock']
+    filterset_fields = ['category', 'quantity']
     search_fields = ['name', 'description']
-    ordering_fields = ['price', 'stock']
+    ordering_fields = ['price', 'quantity']
 
 
 # Детальная информация о товаре
@@ -143,7 +143,7 @@ class BasketView(APIView):
 
         try:
             product_info = ProductInfo.objects.get(id=product_info_id)
-            if product_info.stock < quantity:
+            if product_info.quantity < quantity:
                 return Response({'detail': 'Недостаточно товара на складе.'}, status=status.HTTP_400_BAD_REQUEST)
         except ProductInfo.DoesNotExist:
             return Response({'detail': 'Продукт не найден.'}, status=status.HTTP_404_NOT_FOUND)
@@ -182,7 +182,7 @@ class ContactCreateView(CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(email=self.request.user.email)
 
 # добавим представление для обновления и удаления адреса доставки:
 class ContactUpdateView(RetrieveUpdateDestroyAPIView):
@@ -197,11 +197,12 @@ class ContactUpdateView(RetrieveUpdateDestroyAPIView):
 class OrderConfirmView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request, *args, **kwargs):
         contact_id = request.data.get('contact')
 
         try:
-            contact = Contact.objects.get(id=contact_id, user=request.user)
+            # Исправленная фильтрация по email
+            contact = Contact.objects.get(id=contact_id, email=request.user.email)
             basket = Order.objects.get(user=request.user, state='basket')
 
             if not basket.items.exists():
