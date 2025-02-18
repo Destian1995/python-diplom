@@ -62,9 +62,6 @@ class User(AbstractUser):
     USERNAME_FIELD = 'email'
     email = models.EmailField(_('email'), unique=True)
 
-    company = models.CharField(verbose_name='Компания', max_length=40, blank=True)
-    position = models.CharField(verbose_name='Должность', max_length=40, blank=True)
-
     username_validator = UnicodeUsernameValidator()
     username = models.CharField(
         _('username'),
@@ -245,7 +242,6 @@ class ProductParameter(models.Model):
 
 
 class Contact(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, max_length=100, default='')
     first_name = models.CharField(max_length=100, default='', verbose_name='Имя')
     last_name = models.CharField(max_length=100, default='', verbose_name='Фамилия')
     patronymic = models.CharField(max_length=100, null=True, blank=True, verbose_name='Отчество')

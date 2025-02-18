@@ -19,10 +19,10 @@ from .serializers import (
     ProductInfoSerializer, ContactSerializer, OrderSerializer,
     OrderItemSerializer
 )
+import logging
 
-class ContactCreateView(CreateAPIView):
-    queryset = Contact.objects.all()
-    serializer_class = ContactSerializer
+logger = logging.getLogger(__name__)
+
 
 # Регистрация нового пользователя
 class RegistrationView(CreateAPIView):
@@ -36,9 +36,7 @@ class RegistrationView(CreateAPIView):
 
         # Создаём пользователя с захэшированным паролем
         user = serializer.save()
-        user.set_password(serializer.validated_data['password'])
         user.save()
-
         # Создание токена и отправка письма
         token_obj = ConfirmEmailToken.objects.create(user=user)
         confirmation_link = f"http://{request.get_host()}/api/confirm-email/{token_obj.key}/"
@@ -83,12 +81,12 @@ class LoginView(GenericAPIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
-        user = authenticate(request, email=email, password=password)
+        user = authenticate(request, email=email, password=password)  # исправленный вызов
+
         if user and user.is_active:
             token, _ = Token.objects.get_or_create(user=user)
             return Response({'token': token.key, 'detail': 'Успешный вход.'})
-        elif user and not user.is_active:
-            return Response({'detail': 'Аккаунт не активирован. Проверьте почту.'}, status=status.HTTP_403_FORBIDDEN)
+
         return Response({'detail': 'Неверные учетные данные.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -104,14 +102,10 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
-    # Фильтрация
-    filterset_fields = ['category', 'brand', 'stock']
-
-    # Поиск
+    filterset_fields = ['category', 'stock']
     search_fields = ['name', 'description']
+    ordering_fields = ['price', 'stock']
 
-    # Сортировка
-    ordering_fields = ['name', 'stock']
 
 # Детальная информация о товаре
 class ProductInfoDetailView(RetrieveAPIView):
@@ -132,16 +126,14 @@ class BasketView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Получаем или создаем заказ со статусом 'basket'
         basket, created = Order.objects.get_or_create(user=request.user, state='basket')
         serializer = OrderSerializer(basket)
         return Response(serializer.data)
 
     def post(self, request):
-        # Добавление товара в корзину.
-        # Ожидаем, что в запросе будут product_info (id) и quantity
         product_info_id = request.data.get('product_info')
         quantity = request.data.get('quantity', 1)
+
         try:
             quantity = int(quantity)
             if quantity <= 0:
@@ -149,41 +141,49 @@ class BasketView(APIView):
         except ValueError:
             return Response({'detail': 'Некорректное количество.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not product_info_id:
-            return Response({'detail': 'Не указан product_info.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             product_info = ProductInfo.objects.get(id=product_info_id)
+            if product_info.stock < quantity:
+                return Response({'detail': 'Недостаточно товара на складе.'}, status=status.HTTP_400_BAD_REQUEST)
         except ProductInfo.DoesNotExist:
-            return Response({'detail': 'Информация о продукте не найдена.'}, status=status.HTTP_404_NOT_FOUND)
-        basket, created = Order.objects.get_or_create(user=request.user, state='basket')
+            return Response({'detail': 'Продукт не найден.'}, status=status.HTTP_404_NOT_FOUND)
+
+        basket, _ = Order.objects.get_or_create(user=request.user, state='basket')
         order_item, created = OrderItem.objects.get_or_create(
             order=basket, product_info=product_info,
             defaults={'quantity': quantity}
         )
         if not created:
-            order_item.quantity += int(quantity)
+            order_item.quantity += quantity
             order_item.save()
+
         serializer = OrderItemSerializer(order_item)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def delete(self, request):
-        # Удаление товара из корзины.
-        # Ожидаем, что в запросе будет product_info (id)
         product_info_id = request.data.get('product_info')
-        if not product_info_id:
-            return Response({'detail': 'Не указан product_info.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             basket = Order.objects.get(user=request.user, state='basket')
-        except Order.DoesNotExist:
-            return Response({'detail': 'Корзина пуста.'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
             order_item = OrderItem.objects.get(order=basket, product_info_id=product_info_id)
             order_item.delete()
+
+            # Удаляем пустую корзину
+            if not basket.items.exists():
+                basket.delete()
+
             return Response({'detail': 'Позиция удалена.'}, status=status.HTTP_204_NO_CONTENT)
-        except OrderItem.DoesNotExist:
+        except (Order.DoesNotExist, OrderItem.DoesNotExist):
             return Response({'detail': 'Позиция не найдена.'}, status=status.HTTP_404_NOT_FOUND)
 
-# Создание контакта уже реализовано (ContactCreateView),
+
+class ContactCreateView(CreateAPIView):
+    serializer_class = ContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 # добавим представление для обновления и удаления адреса доставки:
 class ContactUpdateView(RetrieveUpdateDestroyAPIView):
     serializer_class = ContactSerializer
@@ -199,32 +199,22 @@ class OrderConfirmView(APIView):
 
     def post(self, request):
         contact_id = request.data.get('contact')
-        if not contact_id:
-            return Response({'detail': 'Не указан контакт.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             contact = Contact.objects.get(id=contact_id, user=request.user)
-        except Contact.DoesNotExist:
-            return Response({'detail': 'Контакт не найден.'}, status=status.HTTP_404_NOT_FOUND)
-        try:
             basket = Order.objects.get(user=request.user, state='basket')
-        except Order.DoesNotExist:
-            return Response({'detail': 'Корзина пуста.'}, status=status.HTTP_400_BAD_REQUEST)
-        print("basket:", basket)  # Логирование состояния корзины
-        if basket.order_items.count() == 0:
-            return Response({'detail': 'В корзине нет товаров.'}, status=status.HTTP_400_BAD_REQUEST)
-        basket.contact = contact
-        basket.state = 'new'
-        basket.save()
-        # Отправляем email с подтверждением заказа
-        send_mail(
-            subject='Подтверждение заказа',
-            message=f'Ваш заказ #{basket.id} подтвержден.',
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[request.user.email],
-            fail_silently=False,
-        )
-        serializer = OrderSerializer(basket)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+            if not basket.items.exists():
+                return Response({'detail': 'Корзина пуста.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            basket.contact = contact
+            basket.state = 'new'
+            basket.save()
+
+            serializer = OrderSerializer(basket)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except (Contact.DoesNotExist, Order.DoesNotExist):
+            return Response({'detail': 'Контакт или корзина не найдены.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 # Получение списка заказов (исключая корзину)

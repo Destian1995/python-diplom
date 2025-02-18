@@ -1,14 +1,24 @@
 import yaml
-from django.core.management.base import BaseCommand
-from backend.models import Category, Product, ProductInfo, ProductParameter, Shop, Parameter
-from django.db import IntegrityError
+import uuid
 import os
+from django.core.management.base import BaseCommand
+from django.db import IntegrityError
+from backend.models import Category, Product, ProductInfo, ProductParameter, Shop, Parameter
+
+# Словарь перевода параметров на русский язык
+PARAMETER_TRANSLATIONS = {
+    "Screen Size (inches)": "Диагональ (дюйм)",
+    "Resolution (pixels)": "Разрешение (пикс)",
+    "Internal Memory (GB)": "Встроенная память (Гб)",
+    "Color": "Цвет",
+    "Capacity (GB)": "Объем памяти (Гб)",
+    "Smart TV": "Смарт-ТВ"
+}
 
 class Command(BaseCommand):
     help = 'Импортирует товары из YAML файла'
 
     def add_arguments(self, parser):
-        # Добавление аргумента для пути к YAML файлу
         parser.add_argument(
             '--file',
             type=str,
@@ -31,13 +41,11 @@ class Command(BaseCommand):
         goods = data.get('goods', [])
 
         # Создание/поиск магазина
-        shop_instance = None
-        if shop_name:
-            shop_instance, created = Shop.objects.get_or_create(name=shop_name)
-            if created:
-                self.stdout.write(self.style.SUCCESS(f'Создан магазин {shop_name}.'))
-            else:
-                self.stdout.write(self.style.WARNING(f'Магазин {shop_name} уже существует.'))
+        shop_instance, created = Shop.objects.get_or_create(name=shop_name)
+        if created:
+            self.stdout.write(self.style.SUCCESS(f'Создан магазин {shop_name}.'))
+        else:
+            self.stdout.write(self.style.WARNING(f'Магазин {shop_name} уже существует.'))
 
         # Импорт категорий
         category_map = {}
@@ -55,6 +63,11 @@ class Command(BaseCommand):
         seen_external_ids = set()
         for product_data in goods:
             external_id = product_data.get('id')
+
+            # Генерация уникального external_id, если он отсутствует
+            if not external_id:
+                external_id = str(uuid.uuid4())
+
             if external_id in seen_external_ids:
                 self.stdout.write(self.style.ERROR(f"Дубликат external_id {external_id} найден в YAML-файле. Пропускаем этот товар."))
                 continue
@@ -68,22 +81,28 @@ class Command(BaseCommand):
             try:
                 # Импорт продукта
                 product, created = Product.objects.get_or_create(
-                    category=category,
-                    name=product_data['name'],
-                    defaults={'model': product_data['model']}
+                    external_id=external_id,
+                    defaults={
+                        'category': category,
+                        'name': product_data['name'],
+                        'model': product_data['model'],
+                        'description': product_data.get('description', ''),
+                        'stock': product_data.get('quantity', 0),
+                        'brand': product_data.get('brand', '')
+                    }
                 )
                 if created:
-                    self.stdout.write(self.style.SUCCESS(f'Продукт {product.name} создан.'))
+                    self.stdout.write(self.style.SUCCESS(f'Продукт {product.name} создан с external_id {external_id}.'))
                 else:
-                    self.stdout.write(self.style.WARNING(f'Продукт {product.name} уже существует.'))
+                    self.stdout.write(self.style.WARNING(f'Продукт {product.name} уже существует с external_id {external_id}.'))
 
                 # Импорт информации о товаре
                 product_info, created = ProductInfo.objects.get_or_create(
                     product=product,
-                    external_id=external_id,
                     shop=shop_instance,
                     defaults={
                         'model': product_data['model'],
+                        'external_id': external_id,
                         'quantity': product_data['quantity'],
                         'price': product_data['price'],
                         'price_rrc': product_data['price_rrc']
@@ -94,19 +113,20 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write(self.style.WARNING(f'Информация о товаре {product.name} уже существует.'))
 
-                # Импорт параметров товара
+                # Импорт параметров товара (с переводом на русский язык)
                 for param_name, param_value in product_data.get('parameters', {}).items():
                     if param_value:  # Пропуск пустых значений параметров
-                        param, created = Parameter.objects.get_or_create(name=param_name)
+                        translated_param_name = PARAMETER_TRANSLATIONS.get(param_name, param_name)  # Перевод
+                        param, created = Parameter.objects.get_or_create(name=translated_param_name)
                         product_param, created = ProductParameter.objects.get_or_create(
                             product_info=product_info,
                             parameter=param,
                             defaults={'value': param_value}
                         )
                         if created:
-                            self.stdout.write(self.style.SUCCESS(f'Параметр {param_name}: {param_value} добавлен для товара {product.name}.'))
+                            self.stdout.write(self.style.SUCCESS(f'Параметр {translated_param_name}: {param_value} добавлен для товара {product.name}.'))
                         else:
-                            self.stdout.write(self.style.WARNING(f'Параметр {param_name}: {param_value} для товара {product.name} уже существует.'))
+                            self.stdout.write(self.style.WARNING(f'Параметр {translated_param_name}: {param_value} для товара {product.name} уже существует.'))
 
             except IntegrityError as e:
                 self.stdout.write(self.style.ERROR(f"Ошибка целостности при импорте товара {product_data['name']}: {e}"))
