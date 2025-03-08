@@ -241,5 +241,11 @@ orders/urls.py                                                                  
 ----------------------------------------------------------------------------------------------------------------------
 TOTAL                                                                                      624    149    76%
 ```
+
+## Swagger
+![swagger](https://github.com/user-attachments/assets/d0cf0942-4639-4301-a280-e8c2ca8a8f12)
+## ReDoc - документация
+![reDoc](https://github.com/user-attachments/assets/9e0a2beb-2e59-4679-b740-074bf4406d3c)
+
 ---
 
