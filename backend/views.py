@@ -3,11 +3,12 @@ from rest_framework.generics import (
     RetrieveUpdateDestroyAPIView, UpdateAPIView
 )
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.views import APIView
 from django.conf import settings
+from .serializers import ConfirmEmailTokenSerializer
+from .serializers import UserSerializer
+from django.shortcuts import render
 from django.contrib.auth import authenticate
 from rest_framework import status, permissions, viewsets, filters
 from rest_framework.response import Response
@@ -28,16 +29,22 @@ logger = logging.getLogger(__name__)
 
 # Регистрация нового пользователя
 class RegistrationView(CreateAPIView):
+    """
+    Представление для регистрации нового пользователя.
+    Создаёт нового пользователя и отправляет ему email для подтверждения.
+    """
     queryset = CustomUser.objects.all()
     serializer_class = RegistrationSerializer
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
+        """
+        Регистрирует нового пользователя, сохраняет его в базе данных,
+        отправляет email с подтверждением и возвращает сообщение об успешной регистрации.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Создаём пользователя (метод serializer.save() уже сохраняет объект)
         user = serializer.save()
-        # Отправляем подтверждение email асинхронно через Celery
         from backend.tasks import send_confirmation_email
         send_confirmation_email.delay(user.id)
         return Response(
@@ -47,9 +54,18 @@ class RegistrationView(CreateAPIView):
 
 # Подтверждение email по токену
 class ConfirmEmailView(APIView):
+    """
+    Представление для подтверждения email с использованием токена.
+    Проверяет токен и активирует аккаунт пользователя.
+    """
+    serializer_class = ConfirmEmailTokenSerializer
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, key):
+        """
+        Проверяет токен, активирует пользователя и удаляет токен.
+        Возвращает сообщение об успешном подтверждении.
+        """
         try:
             token_obj = ConfirmEmailToken.objects.get(key=key)
         except ConfirmEmailToken.DoesNotExist:
@@ -62,9 +78,17 @@ class ConfirmEmailView(APIView):
 
 # Авторизация (вход)
 class LoginView(GenericAPIView):
+    """
+    Представление для аутентификации пользователя.
+    Принимает email и пароль, проверяет их и выдает токен для авторизованного доступа.
+    """
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
+        """
+        Проводит аутентификацию пользователя, проверяет email и пароль.
+        Возвращает токен для дальнейших запросов.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -78,12 +102,19 @@ class LoginView(GenericAPIView):
 
 # Список товаров
 class ProductListView(ListAPIView):
+    """
+    Представление для получения списка товаров.
+    """
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.AllowAny]
 
 # ViewSet для товаров
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Представление для работы с товарами.
+    Предоставляет методы для получения списка товаров и их фильтрации.
+    """
     queryset = Product.objects.all().select_related('category').prefetch_related('infos')
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -93,26 +124,44 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 
 # Детальная информация о товаре
 class ProductInfoDetailView(RetrieveAPIView):
+    """
+    Представление для получения детальной информации о товаре.
+    """
     queryset = ProductInfo.objects.all()
     serializer_class = ProductInfoSerializer
     permission_classes = [permissions.AllowAny]
 
 # Список всех параметров
 class ParameterListView(ListAPIView):
+    """
+    Представление для получения списка всех параметров.
+    """
     queryset = Parameter.objects.all()
     serializer_class = ParameterSerializer
     permission_classes = [permissions.AllowAny]
 
 # Работа с корзиной: получение, добавление и удаление позиций
 class BasketView(APIView):
+    """
+    Представление для работы с корзиной пользователя.
+    Позволяет получить корзину, добавить товары в корзину и удалить товары из корзины.
+    """
+    serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """
+        Получает корзину текущего пользователя.
+        """
         basket, created = Order.objects.get_or_create(user=request.user, state='basket')
         serializer = OrderSerializer(basket)
         return Response(serializer.data)
 
     def post(self, request):
+        """
+        Добавляет товар в корзину пользователя.
+        Проверяет количество товара на складе.
+        """
         product_info_id = request.data.get('product_info')
         quantity = request.data.get('quantity', 1)
 
@@ -143,6 +192,9 @@ class BasketView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def delete(self, request):
+        """
+        Удаляет товар из корзины пользователя.
+        """
         product_info_id = request.data.get('product_info')
 
         try:
@@ -157,25 +209,45 @@ class BasketView(APIView):
 
 # Создание контакта
 class ContactCreateView(CreateAPIView):
+    """
+    Представление для создания контакта пользователя.
+    """
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
+        """
+        Сохраняет контакт с email текущего пользователя.
+        """
         serializer.save(email=self.request.user.email)
 
 # Обновление и удаление адреса доставки
 class ContactUpdateView(RetrieveUpdateDestroyAPIView):
+    """
+    Представление для обновления или удаления контакта пользователя.
+    """
     serializer_class = ContactSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        """
+        Получает все контакты для текущего пользователя.
+        """
         return Contact.objects.filter(user=self.request.user)
 
 # Подтверждение заказа (из корзины в новый заказ)
 class OrderConfirmView(APIView):
+    """
+    Представление для подтверждения заказа.
+    Переводит корзину в статус нового заказа.
+    """
+    serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        """
+        Переводит корзину в новый заказ, привязывая контактную информацию.
+        """
         contact_id = request.data.get('contact')
         try:
             contact = Contact.objects.get(id=contact_id, email=request.user.email)
@@ -192,38 +264,26 @@ class OrderConfirmView(APIView):
 
 # Получение списка заказов (без корзины)
 class OrderListView(ListAPIView):
+    """
+    Представление для получения списка заказов пользователя.
+    """
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).exclude(state='basket')
+        """
+        Получает список заказов для текущего пользователя.
+        """
+        if getattr(self, "swagger_fake_view", False):
+            return Order.objects.none()  # Заглушка для OpenAPI
+        return Order.objects.filter(user=self.request.user)
 
 # Детали заказа
 class OrderDetailView(RetrieveAPIView):
-    serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
-
-# Редактирование статуса заказа
-class OrderStatusUpdateView(UpdateAPIView):
-    serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    """
+    Представление для получения детальной информации по заказу.
+    """
     queryset = Order.objects.all()
-
-    def perform_update(self, serializer):
-        order = self.get_object()
-        new_status = self.request.data.get('state')
-        if not self.request.user.is_staff:
-            raise PermissionDenied('Нет прав для изменения статуса.')
-        if new_status not in [state[0] for state in STATE_CHOICES]:
-            raise ValidationError({'detail': 'Неверный статус.'})
-        serializer.save(state=new_status)
-
-class ProtectedView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, *args, **kwargs):
-        return Response({"detail": "Доступ разрешён. Вы аутентифицированы."})
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
 

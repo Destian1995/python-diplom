@@ -1,4 +1,7 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+from typing import Optional
+
 from .models import (
     User as CustomUser, Shop, Category, Product, ProductInfo,
     Parameter, ProductParameter, Contact, Order, OrderItem, ConfirmEmailToken
@@ -40,44 +43,56 @@ class CategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 class ProductSerializer(serializers.ModelSerializer):
-    shop = serializers.SerializerMethodField()  # Получение магазина
-    price = serializers.SerializerMethodField()  # Получение цены
-    quantity = serializers.SerializerMethodField()  # Получение количества
-    model = serializers.SerializerMethodField()  # Получение модели (производителя)
-    characteristics = serializers.SerializerMethodField()  # Приведённые параметры
+    shop = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    quantity = serializers.SerializerMethodField()
+    model = serializers.SerializerMethodField()
+    characteristics = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = ['id', 'name', 'shop', 'price', 'quantity', 'model', 'characteristics']
 
-    def get_shop(self, obj):
-        """ Получает название магазина, в котором продаётся товар """
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_shop(self, obj) -> Optional[str]:
         product_info = obj.infos.first()
         return product_info.shop.name if product_info else None
 
-    def get_price(self, obj):
-        """ Получает цену товара из ProductInfo """
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_price(self, obj) -> Optional[int]:
         product_info = obj.infos.first()
         return product_info.price if product_info else None
 
-    def get_quantity(self, obj):
-        """ Получает количество товара из ProductInfo """
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_quantity(self, obj) -> Optional[int]:
         product_info = obj.infos.first()
         return product_info.quantity if product_info else 0
 
-    def get_model(self, obj):
-        """ Получает модель (производителя) товара из ProductInfo """
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_model(self, obj) -> Optional[str]:
         product_info = obj.infos.first()
         return product_info.model if product_info else None
 
-    def get_characteristics(self, obj):
-        """ Собирает характеристики товара из ProductParameter """
+    @extend_schema_field(serializers.DictField(child=serializers.CharField()))
+    def get_characteristics(self, obj) -> dict[str, str]:
         params = {}
         for product_param in ProductParameter.objects.filter(product_info__product=obj):
-            param_name = product_param.parameter.name
-            param_value = product_param.value
-            params[param_name] = param_value
+            params[product_param.parameter.name] = product_param.value
         return params
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product_info.product.name', read_only=True)
+    shop = serializers.CharField(source='product_info.shop.name', read_only=True)
+    price = serializers.IntegerField(source='product_info.price', read_only=True)
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product_name', 'shop', 'price', 'quantity', 'total']
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_total(self, obj) -> int:
+        return obj.quantity * obj.product_info.price
 
 
 class ProductInfoWriteSerializer(serializers.ModelSerializer):
@@ -119,19 +134,6 @@ class ContactSerializer(serializers.ModelSerializer):
             'first_name', 'last_name', 'patronymic', 'email', 'phone',
             'city', 'street', 'house', 'structure', 'building', 'apartment'
         ]
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product_info.product.name', read_only=True)
-    shop = serializers.CharField(source='product_info.shop.name', read_only=True)
-    price = serializers.IntegerField(source='product_info.price', read_only=True)
-    total = serializers.SerializerMethodField()
-
-    class Meta:
-        model = OrderItem
-        fields = ['id', 'product_name', 'shop', 'price', 'quantity', 'total']
-
-    def get_total(self, obj):
-        return obj.quantity * obj.product_info.price
 
 
 class OrderSerializer(serializers.ModelSerializer):

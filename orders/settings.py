@@ -53,11 +53,14 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_filters',
     'backend',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework.authentication.TokenAuthentication'],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
