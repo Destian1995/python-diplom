@@ -40,7 +40,7 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 # Таймаут задачи
 CELERY_TASK_TIME_LIMIT = 30
 
-TEST_RUNNER = "pytest_django.runner.DiscoverRunner"
+TEST_RUNNER = "django.test.runner.DiscoverRunner"
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -61,6 +61,21 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework.authentication.TokenAuthentication'],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '6/minute',  # 5 запросов в минуту
+        'anon': '6/minute',  # 5 запросов в минуту для анонимных пользователей
+    }
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
 }
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
