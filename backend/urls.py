@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .views import ProtectedView
 from .views import ProductViewSet
 from .views import (
     RegistrationView,
@@ -31,4 +32,5 @@ urlpatterns = [
     path('orders/', OrderListView.as_view(), name='order_list'),
     path('orders/<int:pk>/', OrderDetailView.as_view(), name='order_detail'),
     path('orders/<int:pk>/status/', OrderStatusUpdateView.as_view(), name='order_status_update'),
+    path('protected-view/', ProtectedView.as_view(), name='protected-view'),
 ]

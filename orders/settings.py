@@ -31,6 +31,16 @@ ALLOWED_HOSTS = ['*']
 
 SITE_URL = 'http://172.20.43.254:8000'
 # Application definition
+# Redis в качестве брокера для Celery
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+
+# Бэкэнд для хранения состояния задач (можно заменить на PostgreSQL)
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# Таймаут задачи
+CELERY_TASK_TIME_LIMIT = 30
+
+TEST_RUNNER = "pytest_django.runner.DiscoverRunner"
 
 INSTALLED_APPS = [
     'django.contrib.admin',

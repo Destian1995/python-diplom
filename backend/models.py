@@ -5,6 +5,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_rest_passwordreset.tokens import get_token_generator
 
+
 # Статусы для заказа
 STATE_CHOICES = (
     ('basket', 'Статус корзины'),
@@ -94,6 +95,12 @@ class User(AbstractUser):
         verbose_name_plural = "Список пользователей"
         ordering = ('email',)
 
+    def save(self, *args, **kwargs):
+        from backend.tasks import send_confirmation_email
+        is_new = self.pk is None  # Проверяем, новый ли это пользователь
+        super().save(*args, **kwargs)
+        if is_new and not self.is_active:
+            send_confirmation_email.delay(self.id)
 
 # Модель магазина (Shop)
 class Shop(models.Model):
@@ -263,6 +270,18 @@ class Contact(models.Model):
 
 # Модель заказа
 class Order(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь")
+    state = models.CharField(max_length=20, choices=STATE_CHOICES, verbose_name="Статус заказа")
+
+    def save(self, *args, **kwargs):
+        previous_state = None
+        if self.pk:
+            previous_state = Order.objects.get(pk=self.pk).state  # Получаем старый статус заказа
+
+        super().save(*args, **kwargs)
+
+        if previous_state and previous_state != self.state:
+            send_order_update_email.delay(self.user.id)
     user = models.ForeignKey(
         User,
         verbose_name='Пользователь',
