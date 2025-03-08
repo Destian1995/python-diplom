@@ -287,3 +287,22 @@ class OrderDetailView(RetrieveAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+class OrderStatusUpdateView(UpdateAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = Order.objects.all()
+
+    def perform_update(self, serializer):
+        order = self.get_object()
+        new_status = self.request.data.get('state')
+        if not self.request.user.is_staff:
+            raise PermissionDenied('Нет прав для изменения статуса.')
+        if new_status not in [state[0] for state in STATE_CHOICES]:
+            raise ValidationError({'detail': 'Неверный статус.'})
+        serializer.save(state=new_status)
+class ProtectedView(APIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        return Response({"detail": "Доступ разрешён. Вы аутентифицированы."})
