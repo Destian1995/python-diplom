@@ -51,7 +51,7 @@ python manage.py runserver 0.0.0.0:8000
 
 Теперь протестируем API с помощью `curl`. Убедитесь, что вы уже создали суперпользователя и получили токен авторизации.
 
-### 6.1. Регистрация пользователя
+###  Регистрация пользователя
 ```bash
 curl -X POST http://<IP хоста>:8000/api/register/ \
      -H "Content-Type: application/json" \
@@ -63,7 +63,7 @@ curl -X POST http://<IP хоста>:8000/api/register/ \
          }'
 ```
 
-### 6.2. Авторизация пользователя
+###  Авторизация пользователя
 ```bash
 curl -X POST http://<IP хоста>:8000/api/login/ \
      -H "Content-Type: application/json" \
@@ -76,7 +76,7 @@ curl -X POST http://<IP хоста>:8000/api/login/ \
 
 ---
 
-### 6.3. Получение списка товаров
+###  Получение списка товаров
 ```bash
 curl -X GET http://<IP хоста>:8000/api/products/ \
      -H "Authorization: Token <your_token_here>"
@@ -84,7 +84,7 @@ curl -X GET http://<IP хоста>:8000/api/products/ \
 
 ---
 
-### 6.4. Получение спецификации товара
+### Получение спецификации товара
 ```bash
 curl -X GET http://<IP хоста>:8000/api/products/1/ \
      -H "Authorization: Token <your_token_here>"
@@ -92,7 +92,7 @@ curl -X GET http://<IP хоста>:8000/api/products/1/ \
 
 ---
 
-### 6.5. Добавление товара в корзину
+###  Добавление товара в корзину
 ```bash
 curl -X POST http://<IP хоста>:8000/api/basket/ \
      -H "Content-Type: application/json" \
@@ -105,7 +105,7 @@ curl -X POST http://<IP хоста>:8000/api/basket/ \
 
 ---
 
-### 6.6. Удаление товара из корзины
+###  Удаление товара из корзины
 ```bash
 curl -X DELETE http://<IP хоста>:8000/api/basket/1/ \
      -H "Authorization: Token <your_token_here>"
@@ -113,7 +113,7 @@ curl -X DELETE http://<IP хоста>:8000/api/basket/1/ \
 
 ---
 
-### 6.7. Добавление адреса доставки
+### Добавление адреса доставки
 ```bash
 curl -X POST http://<IP хоста>:8000/api/contacts/ \
      -H "Content-Type: application/json" \
@@ -135,7 +135,7 @@ curl -X POST http://<IP хоста>:8000/api/contacts/ \
 
 ---
 
-### 6.8. Подтверждение заказа
+### Подтверждение заказа
 ```bash
 curl -X POST http://<IP хоста>:8000/api/order/confirm/ \
      -H "Content-Type: application/json" \
@@ -147,7 +147,7 @@ curl -X POST http://<IP хоста>:8000/api/order/confirm/ \
 
 ---
 
-### 6.9. Получение списка заказов
+###  Получение списка заказов
 ```bash
 curl -X GET http://<IP хоста>:8000/api/orders/ \
      -H "Authorization: Token <your_token_here>"
@@ -155,7 +155,7 @@ curl -X GET http://<IP хоста>:8000/api/orders/ \
 
 ---
 
-### 6.10. Получение деталей заказа
+###  Получение деталей заказа
 ```bash
 curl -X GET http://<IP хоста>:8000/api/orders/1/ \
      -H "Authorization: Token <your_token_here>"
@@ -163,7 +163,7 @@ curl -X GET http://<IP хоста>:8000/api/orders/1/ \
 
 ---
 
-### 6.11. Редактирование статуса заказа
+###  Редактирование статуса заказа
 ```bash
 curl -X PATCH http://<IP хоста>:8000/api/orders/1/ \
      -H "Content-Type: application/json" \
@@ -173,5 +173,73 @@ curl -X PATCH http://<IP хоста>:8000/api/orders/1/ \
          }'
 ```
 
+
+### Результаты тестов
+```
+(env) vagrant@diplom-pyhon:~/python-diplom$ pytest --collect-only
+======================================================== test session starts ========================================================
+platform linux -- Python 3.10.16, pytest-8.3.5, pluggy-1.5.0
+django: version: 5.1.6, settings: orders.settings (from ini)
+rootdir: /home/vagrant/python-diplom
+configfile: pytest.ini
+plugins: django-4.10.0
+collected 3 items
+
+<Dir python-diplom>
+  <Package backend>
+    <Module tests.py>
+      <Function test_login_view>
+      <Function test_protected_view_unauthorized>
+      <Function test_protected_view_authorized>
+
+==================================================== 3 tests collected in 0.10s =====================================================
+(env) vagrant@diplom-pyhon:~/python-diplom$ pytest
+======================================================== test session starts ========================================================
+platform linux -- Python 3.10.16, pytest-8.3.5, pluggy-1.5.0
+django: version: 5.1.6, settings: orders.settings (from ini)
+rootdir: /home/vagrant/python-diplom
+configfile: pytest.ini
+plugins: django-4.10.0
+collected 3 items
+
+backend/tests.py ...                                                                                                          [100%]
+
+========================================================= 3 passed in 2.71s =========================================================
+(env) vagrant@diplom-pyhon:~/python-diplom$ coverage run -m pytest
+======================================================== test session starts ========================================================
+platform linux -- Python 3.10.16, pytest-8.3.5, pluggy-1.5.0
+django: version: 5.1.6, settings: orders.settings (from ini)
+rootdir: /home/vagrant/python-diplom
+configfile: pytest.ini
+plugins: django-4.10.0
+collected 3 items
+
+backend/tests.py ...                                                                                                          [100%]
+
+========================================================= 3 passed in 2.92s =========================================================
+(env) vagrant@diplom-pyhon:~/python-diplom$ coverage report -m
+Name                                                                                     Stmts   Miss  Cover   Missing
+----------------------------------------------------------------------------------------------------------------------
+backend/__init__.py                                                                          0      0   100%
+backend/admin.py                                                                            23      0   100%
+backend/apps.py                                                                              4      0   100%
+backend/migrations/0001_initial.py                                                          10      0   100%
+backend/migrations/0002_remove_contact_user_remove_user_company_and_more.py                  4      0   100%
+backend/migrations/0003_alter_productinfo_discount_alter_productinfo_price_and_more.py       4      0   100%
+backend/migrations/0004_rename_stock_product_quantity.py                                     4      0   100%
+backend/migrations/__init__.py                                                               0      0   100%
+backend/models.py                                                                          187     33    82%   34, 47-55, 91, 124, 143, 167, 200, 204-207, 220, 248, 269, 277-284, 312, 341, 372, 375-377, 380
+backend/serializers.py                                                                     112     22    80%   27-28, 55-56, 60-61, 65-66, 70-71, 75-80, 134, 146-150
+backend/tasks.py                                                                            32     20    38%   14-28, 35-44, 51-61
+backend/tests.py                                                                            30      0   100%
+backend/urls.py                                                                              8      0   100%
+backend/views.py                                                                           161     74    54%   36-43, 53-61, 77, 111-113, 116-143, 146-156, 164, 172, 179-191, 199, 207, 216-222
+orders/__init__.py                                                                           2      0   100%
+orders/celery.py                                                                             6      0   100%
+orders/settings.py                                                                          34      0   100%
+orders/urls.py                                                                               3      0   100%
+----------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                      624    149    76%
+```
 ---
 
