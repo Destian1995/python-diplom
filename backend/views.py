@@ -14,6 +14,7 @@ from rest_framework import status, permissions, viewsets, filters
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.authtoken.models import Token
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from .models import (
     User as CustomUser, Product, ProductInfo, ConfirmEmailToken,
     Order, OrderItem, Contact, STATE_CHOICES, Parameter
@@ -24,8 +25,10 @@ from .serializers import (
     OrderItemSerializer
 )
 import logging
-
+from rest_framework.views import APIView
+from rest_framework.response import Response
 logger = logging.getLogger(__name__)
+
 
 # Регистрация нового пользователя
 class RegistrationView(CreateAPIView):
@@ -36,6 +39,7 @@ class RegistrationView(CreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = RegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
         """
@@ -83,6 +87,7 @@ class LoginView(GenericAPIView):
     Принимает email и пароль, проверяет их и выдает токен для авторизованного доступа.
     """
     serializer_class = LoginSerializer
+    throttle_classes = [AnonRateThrottle]
 
     def post(self, request, *args, **kwargs):
         """
@@ -148,6 +153,7 @@ class BasketView(APIView):
     """
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def get(self, request):
         """
@@ -306,3 +312,9 @@ class ProtectedView(APIView):
 
     def get(self, request, *args, **kwargs):
         return Response({"detail": "Доступ разрешён. Вы аутентифицированы."})
+
+class TestErrorView(APIView):
+    def get(self, request):
+        # Имитация ошибки
+        raise ValueError("Test error from Rollbar")
+        return Response({"status": "This will never be reached"})

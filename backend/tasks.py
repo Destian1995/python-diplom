@@ -81,3 +81,9 @@ def warm_image_versions(instance_id, model_name):
         image_attr=field
     )
     warmer.warm()
+
+from celery import shared_task
+
+@shared_task
+def broken_task():
+    raise RuntimeError("Test error from Celery")

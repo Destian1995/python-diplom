@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import ProtectedView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from .views import ProductViewSet
+from .views import TestErrorView
 from .views import (
     RegistrationView,
     ConfirmEmailView,
@@ -38,5 +39,6 @@ urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('test-error/', TestErrorView.as_view(), name='test-error'),
 
 ]
