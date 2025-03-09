@@ -81,3 +81,19 @@ class ThrottlingTestCase(APITestCase):
         logger.info(f"Response status code after throttling: {response.status_code}")
         assert response.status_code == 429  # Expected: Too Many Requests
 
+@pytest.mark.django_db
+def test_social_login_vk():
+    client = APIClient()
+
+    # создание тестового пользователя
+    social_account = SocialAccount.objects.create(
+        user=User.objects.create_user(username="testuser", password="password"),
+        provider="vk", extra_data={"access_token": "fake_token"}
+    )
+
+    response = client.post('/accounts/vk/login/callback/', data={
+        'access_token': "fake_token"
+    })
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "token" in response.data  # Проверка наличия токена в ответе

@@ -1,0 +1,41 @@
+{% load socialaccount_tags %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Авторизация</title>
+</head>
+<body>
+    <h1>Добро пожаловать! Войдите через социальные сети:</h1>
+
+    <!-- Отладочный блок (удалить после проверки) -->
+    <div style="border: 2px solid red; padding: 15px; margin: 15px 0;">
+        {% if socialaccount.providers %}
+            Доступные соцсети:
+            {% for provider in socialaccount.providers %}
+                <div style="margin: 5px 0;">
+                    ▶ {{ provider.name }} (id: {{ provider.id }})
+                </div>
+            {% endfor %}
+        {% else %}
+            <div style="color: red; font-weight: bold;">
+                Нет доступных соцсетей!
+            </div>
+        {% endif %}
+    </div>
+
+    <p>
+        <a href="{% provider_login_url 'vk' method='oauth2' %}">Войти через ВКонтакте</a>
+    </p>
+
+    <h1>Зарегистрироваться через социальные сети:</h1>
+
+    <p>
+        <a href="{% provider_login_url 'vk' method='oauth2' %}">Зарегистрироваться через ВКонтакте</a>
+    </p>
+
+    <p>Если у вас уже есть аккаунт, войдите <a href="{% url 'account:login' %}">здесь</a>.</p>
+</body>
+</html>

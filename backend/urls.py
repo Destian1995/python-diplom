@@ -22,6 +22,7 @@ router.register(r'products', ProductViewSet, basename='products')
 
 
 urlpatterns = [
+    path('accounts/', include('allauth.urls')),
     path('', include(router.urls)),
     path('register/', RegistrationView.as_view(), name='register'),
     path('confirm-email/<str:key>/', ConfirmEmailView.as_view(), name='confirm_email'),
