@@ -4,7 +4,10 @@ from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_rest_passwordreset.tokens import get_token_generator
-
+from versatileimagefield.fields import VersatileImageField
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .tasks import warm_image_versions
 
 # Статусы для заказа
 STATE_CHOICES = (
@@ -87,6 +90,12 @@ class User(AbstractUser):
         default='buyer'
     )
 
+    avatar = VersatileImageField(
+        'Avatar',
+        upload_to='avatars/',
+        blank=True,
+        null=True
+    )
     def __str__(self):
         return f'{self.first_name} {self.last_name}'.strip() or self.email
 
@@ -158,6 +167,12 @@ class Product(models.Model):
     )
     description = models.TextField(verbose_name='Описание')
 
+    image = VersatileImageField(
+        'Image',
+        upload_to='products/',
+        blank=True,
+        null=True
+    )
     class Meta:
         verbose_name = 'Продукт'
         verbose_name_plural = "Список продуктов"
@@ -378,3 +393,14 @@ class ConfirmEmailToken(models.Model):
 
     def __str__(self):
         return f"Токен для {self.user.email}"
+
+
+@receiver(post_save, sender=User)
+def warm_user_avatar(sender, instance, **kwargs):
+    if instance.avatar:
+        warm_image_versions.delay(instance.id, 'user')
+
+@receiver(post_save, sender=Product)
+def warm_product_image(sender, instance, **kwargs):
+    if instance.image:
+        warm_image_versions.delay(instance.id, 'product')

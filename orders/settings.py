@@ -1,4 +1,3 @@
-
 """
 Django settings for orders project.
 
@@ -12,7 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -42,14 +41,12 @@ SITE_URL = 'https://172.20.43.254:8000'
 # Application definition
 # Redis в качестве брокера для Celery
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
-SITE_ID = 1
-
 # Бэкэнд для хранения состояния задач (можно заменить на PostgreSQL)
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-
 # Таймаут задачи
 CELERY_TASK_TIME_LIMIT = 30
 
+SITE_ID = 1
 TEST_RUNNER = "django.test.runner.DiscoverRunner"
 
 INSTALLED_APPS = [
@@ -73,7 +70,17 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.vk',
+    'versatileimagefield',
 ]
+
+# Форматы миниатюр
+VERSATILEIMAGEFIELD_RENDITION_KEY_SETS = {
+    'image_versions': [
+        ('small_square', 'crop__100x100'),
+        ('medium', 'thumbnail__300x300'),
+        ('large', 'thumbnail__800x800'),
+    ],
+}
 
 SOCIAL_AUTH_VK_OAUTH2_KEY = '53221865'  # ID приложения
 SOCIAL_AUTH_VK_OAUTH2_SECRET = 'VCnc8UtxEKsoyqMrftF3'  # Защищённый ключ
@@ -217,6 +224,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 

@@ -1,8 +1,9 @@
-from celery import shared_task
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
-from .models import User, ConfirmEmailToken
 import logging
+from celery import shared_task
+from versatileimagefield.image_warmer import VersatileImageFieldWarmer
+
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +12,8 @@ def send_confirmation_email(user_id):
     """
     Асинхронная задача для отправки письма подтверждения
     """
+    from .models import ConfirmEmailToken
+    from .models import User
     try:
         user = User.objects.get(pk=user_id)
         if not user.is_active:
@@ -48,6 +51,7 @@ def send_order_update_email(user_id):
     """
     Асинхронная задача для уведомления о статусе заказа
     """
+    from .models import User
     try:
         user = User.objects.get(id=user_id)
         msg = EmailMultiAlternatives(
@@ -60,3 +64,20 @@ def send_order_update_email(user_id):
     except Exception as e:
         logger.error(f"Ошибка при отправке письма {user_id}: {e}")
 
+
+@shared_task
+def warm_image_versions(instance_id, model_name):
+    from .models import User, Product
+    if model_name == 'user':
+        instance = User.objects.get(id=instance_id)
+        field = 'avatar'
+    elif model_name == 'product':
+        instance = Product.objects.get(id=instance_id)
+        field = 'image'
+
+    warmer = VersatileImageFieldWarmer(
+        instance_or_queryset=instance,
+        rendition_key_set='image_versions',
+        image_attr=field
+    )
+    warmer.warm()
