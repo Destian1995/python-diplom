@@ -49,7 +49,39 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 # Таймаут задачи
 CELERY_TASK_TIME_LIMIT = 30
 
+import pickle
+CACHEOPS_SERIALIZER = 'pickle'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://localhost:6379/1',  # БД Redis
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+# Включаем кэширование для Django-Cachalot
+CACHALOT_ENABLED = True
 SITE_ID = 1
+
+CACHEOPS_REDIS = {
+    'host': 'localhost',  # или IP Redis-сервера
+    'port': 6379,
+    'db': 1,
+    'socket_timeout': 5,
+}
+
+CACHEOPS_DEFAULTS = {
+    'timeout': 60 * 15  # Кэширование по умолчанию на 15 минут
+}
+
+CACHEOPS = {
+    'app_name.Product': {'ops': 'all', 'timeout': 60 * 15},
+    'app_name.Order': {'ops': 'all', 'timeout': 60 * 5},
+}
+
 TEST_RUNNER = "django.test.runner.DiscoverRunner"
 
 INSTALLED_APPS = [
@@ -74,6 +106,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'allauth.socialaccount.providers.vk',
     'versatileimagefield',
+    'cachalot',
 ]
 
 # Форматы миниатюр

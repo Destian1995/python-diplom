@@ -2,16 +2,15 @@ from rest_framework.generics import (
     GenericAPIView, CreateAPIView, ListAPIView, RetrieveAPIView,
     RetrieveUpdateDestroyAPIView, UpdateAPIView
 )
+import time
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError, PermissionDenied
-from rest_framework.views import APIView
-from django.conf import settings
 from .serializers import ConfirmEmailTokenSerializer
 from .serializers import UserSerializer
-from django.shortcuts import render
 from django.contrib.auth import authenticate
 from rest_framework import status, permissions, viewsets, filters
-from rest_framework.response import Response
+from django.http import JsonResponse
+from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.authtoken.models import Token
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
@@ -27,6 +26,9 @@ from .serializers import (
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from cacheops import cached_view
+from cacheops import cached
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +58,7 @@ class RegistrationView(CreateAPIView):
             status=status.HTTP_201_CREATED
         )
 
+
 # Подтверждение email по токену
 class ConfirmEmailView(APIView):
     """
@@ -79,6 +82,7 @@ class ConfirmEmailView(APIView):
         user.save()
         token_obj.delete()
         return Response({'detail': 'Email подтвержден.'}, status=status.HTTP_200_OK)
+
 
 # Авторизация (вход)
 class LoginView(GenericAPIView):
@@ -105,6 +109,7 @@ class LoginView(GenericAPIView):
             return Response({'token': token.key, 'detail': 'Успешный вход.'})
         return Response({'detail': 'Неверные учетные данные.'}, status=status.HTTP_400_BAD_REQUEST)
 
+
 # Список товаров
 class ProductListView(ListAPIView):
     """
@@ -113,6 +118,7 @@ class ProductListView(ListAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.AllowAny]
+
 
 # ViewSet для товаров
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
@@ -127,6 +133,18 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['price', 'quantity']
 
+    @cached(timeout=60 * 15,
+            extra=lambda self: self.request.user.id if self.request.user.is_authenticated else 'anonymous')
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
 # Детальная информация о товаре
 class ProductInfoDetailView(RetrieveAPIView):
     """
@@ -136,6 +154,11 @@ class ProductInfoDetailView(RetrieveAPIView):
     serializer_class = ProductInfoSerializer
     permission_classes = [permissions.AllowAny]
 
+    @cached(timeout=60 * 5, extra=lambda self, req: req.user.id if req.user.is_authenticated else None)
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+
 # Список всех параметров
 class ParameterListView(ListAPIView):
     """
@@ -144,6 +167,7 @@ class ParameterListView(ListAPIView):
     queryset = Parameter.objects.all()
     serializer_class = ParameterSerializer
     permission_classes = [permissions.AllowAny]
+
 
 # Работа с корзиной: получение, добавление и удаление позиций
 class BasketView(APIView):
@@ -155,6 +179,7 @@ class BasketView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle]
 
+    @cached(timeout=60*5, extra=lambda self, req: req.user.id)   # Кэшируем на 5 минут
     def get(self, request):
         """
         Получает корзину текущего пользователя.
@@ -213,6 +238,7 @@ class BasketView(APIView):
         except (Order.DoesNotExist, OrderItem.DoesNotExist):
             return Response({'detail': 'Позиция не найдена.'}, status=status.HTTP_404_NOT_FOUND)
 
+
 # Создание контакта
 class ContactCreateView(CreateAPIView):
     """
@@ -227,6 +253,7 @@ class ContactCreateView(CreateAPIView):
         """
         serializer.save(email=self.request.user.email)
 
+
 # Обновление и удаление адреса доставки
 class ContactUpdateView(RetrieveUpdateDestroyAPIView):
     """
@@ -240,6 +267,7 @@ class ContactUpdateView(RetrieveUpdateDestroyAPIView):
         Получает все контакты для текущего пользователя.
         """
         return Contact.objects.filter(user=self.request.user)
+
 
 # Подтверждение заказа (из корзины в новый заказ)
 class OrderConfirmView(APIView):
@@ -268,6 +296,7 @@ class OrderConfirmView(APIView):
         except (Contact.DoesNotExist, Order.DoesNotExist):
             return Response({'detail': 'Контакт или корзина не найдены.'}, status=status.HTTP_404_NOT_FOUND)
 
+
 # Получение списка заказов (без корзины)
 class OrderListView(ListAPIView):
     """
@@ -276,6 +305,7 @@ class OrderListView(ListAPIView):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    @cached(timeout=60*5, extra=lambda self, req: req.user.id)   # Кэшируем на 10 минут
     def get_queryset(self):
         """
         Получает список заказов для текущего пользователя.
@@ -283,6 +313,7 @@ class OrderListView(ListAPIView):
         if getattr(self, "swagger_fake_view", False):
             return Order.objects.none()  # Заглушка для OpenAPI
         return Order.objects.filter(user=self.request.user)
+
 
 # Детали заказа
 class OrderDetailView(RetrieveAPIView):
@@ -292,6 +323,7 @@ class OrderDetailView(RetrieveAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+
 
 class OrderStatusUpdateView(UpdateAPIView):
     serializer_class = OrderSerializer
@@ -306,6 +338,8 @@ class OrderStatusUpdateView(UpdateAPIView):
         if new_status not in [state[0] for state in STATE_CHOICES]:
             raise ValidationError({'detail': 'Неверный статус.'})
         serializer.save(state=new_status)
+
+
 class ProtectedView(APIView):
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
@@ -313,8 +347,24 @@ class ProtectedView(APIView):
     def get(self, request, *args, **kwargs):
         return Response({"detail": "Доступ разрешён. Вы аутентифицированы."})
 
+
 class TestErrorView(APIView):
     def get(self, request):
         # Имитация ошибки
         raise ValueError("Test error from Rollbar")
         return Response({"status": "This will never be reached"})
+
+
+@cached(timeout=60 * 10)  # Кэшируем на 10 минут
+def product_stats(request):
+    start_time = time.time()
+    # Сложный запрос с JOIN и агрегацией
+    stats = Product.objects.select_related('category').annotate(
+        total_sales=Count('infos__orderitem')
+    ).order_by('-total_sales')[:10]
+    duration = time.time() - start_time
+    return JsonResponse({
+        "data": list(stats.values()),
+        "time": f"{duration:.4f} seconds"
+    })
+

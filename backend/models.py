@@ -8,6 +8,8 @@ from versatileimagefield.fields import VersatileImageField
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .tasks import warm_image_versions
+from cacheops import invalidate_obj
+from cacheops import invalidate_model
 
 # Статусы для заказа
 STATE_CHOICES = (
@@ -96,6 +98,7 @@ class User(AbstractUser):
         blank=True,
         null=True
     )
+
     def __str__(self):
         return f'{self.first_name} {self.last_name}'.strip() or self.email
 
@@ -111,6 +114,7 @@ class User(AbstractUser):
         if is_new and not self.is_active:
             send_confirmation_email.delay(self.id)
 
+
 # Модель магазина (Shop)
 class Shop(models.Model):
     name = models.CharField(max_length=50, verbose_name='Название')
@@ -123,6 +127,11 @@ class Shop(models.Model):
         on_delete=models.CASCADE
     )
     state = models.BooleanField(verbose_name='Статус приема заказов', default=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Сброс кэша всех продуктов магазина
+        ProductInfo.objects.filter(shop=self).invalidate()
 
     class Meta:
         verbose_name = 'Магазин'
@@ -173,6 +182,11 @@ class Product(models.Model):
         blank=True,
         null=True
     )
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        invalidate_obj(self)  # Сброс кэша при изменении товара
+
     class Meta:
         verbose_name = 'Продукт'
         verbose_name_plural = "Список продуктов"
@@ -180,6 +194,9 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+invalidate_model(Product)
 
 
 class ProductInfo(models.Model):
@@ -203,6 +220,10 @@ class ProductInfo(models.Model):
     price = models.PositiveIntegerField(default=0, verbose_name='Цена')
     price_rrc = models.PositiveIntegerField(default=0, verbose_name='Рекомендуемая розничная цена')
     discount = models.PositiveIntegerField(default=0, verbose_name='Скидка (%)', blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        invalidate_obj(self.product)  # Сброс кэша родительского Product
 
     class Meta:
         verbose_name = 'Информация о продукте'
@@ -276,6 +297,11 @@ class Contact(models.Model):
     apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
     phone = models.CharField(max_length=20, verbose_name='Телефон')
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Сброс кэша всех заказов, связанных с этим контактом
+        Order.objects.filter(contact=self).invalidate()
+
     class Meta:
         verbose_name = 'Контакты пользователя'
         verbose_name_plural = "Список контактов пользователя"
@@ -283,12 +309,15 @@ class Contact(models.Model):
     def __str__(self):
         return f'{self.city}, {self.street} {self.house}'
 
+
 # Модель заказа
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь")
     state = models.CharField(max_length=20, choices=STATE_CHOICES, verbose_name="Статус заказа")
 
     def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        invalidate_obj(self)  # Сброс кэша при изменении заказа
         previous_state = None
         if self.pk:
             previous_state = Order.objects.get(pk=self.pk).state  # Получаем старый статус заказа
@@ -297,19 +326,8 @@ class Order(models.Model):
 
         if previous_state and previous_state != self.state:
             send_order_update_email.delay(self.user.id)
-    user = models.ForeignKey(
-        User,
-        verbose_name='Пользователь',
-        related_name='orders',
-        blank=True,
-        on_delete=models.CASCADE
-    )
+
     dt = models.DateTimeField(auto_now_add=True)
-    state = models.CharField(
-        verbose_name='Статус',
-        choices=STATE_CHOICES,
-        max_length=15
-    )
     contact = models.ForeignKey(
         Contact,
         verbose_name='Контакт',
@@ -344,6 +362,10 @@ class OrderItem(models.Model):
         on_delete=models.CASCADE
     )
     quantity = models.PositiveIntegerField(verbose_name='Количество')
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        invalidate_obj(self.order)  # Сброс кэша родительского заказа
 
     class Meta:
         verbose_name = 'Заказанная позиция'
@@ -400,7 +422,9 @@ def warm_user_avatar(sender, instance, **kwargs):
     if instance.avatar:
         warm_image_versions.delay(instance.id, 'user')
 
+
 @receiver(post_save, sender=Product)
 def warm_product_image(sender, instance, **kwargs):
     if instance.image:
         warm_image_versions.delay(instance.id, 'product')
+
