@@ -247,5 +247,8 @@ TOTAL                                                                           
 ## ReDoc - документация
 ![reDoc](https://github.com/user-attachments/assets/9e0a2beb-2e59-4679-b740-074bf4406d3c)
 
+## Обработка Rollbar
+![Исключение Rollbar](https://github.com/user-attachments/assets/4db368b9-fe1b-4d33-9f18-ff6cf4b02681)
+
 ---
 
